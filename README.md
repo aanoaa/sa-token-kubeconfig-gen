@@ -3,5 +3,46 @@
 gen `kubeconfig` to use CI/CD deployment.
 
 1. create SA
-2. rolebinding, clusterrolebinding to SA for restricted kube-api access
-3. generate kubeconfig via SA token secret and current kubeconfig
+2. rolebinding to SA for restricted kube-api access
+3. generate kubeconfig via SA secret
+
+## Example
+
+```
+# rolebinding to sa
+$ cat <<EOF | kubectl apply -f -
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  namespace: default
+  name: my-app-updater
+rules:
+- apiGroups: ["apps"]
+  resources: ["deployments"]
+  verbs: ["get", "list", "update", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: my-app-updater
+  namespace: default
+subjects:
+- kind: ServiceAccount
+  name: my-app-sa
+  namespace: default
+roleRef:
+  kind: Role
+  name: my-app-updater
+  apiGroup: rbac.authorization.k8s.io
+EOF
+
+# capture sa token from sa-secret
+$ TOKEN=`kubectl get secret my-app-token-pr7z7 -o jsonpath='{.data.token}' | base64 --decode`
+
+# generate kubeconfig for deployment
+$ echo $TOKEN | sa-token-kubeconfig-gen > deploy-kubeconfig.yaml
+
+# verify
+$ kubectl get deploy --kubeconfig ./deploy-kubeconfig.yaml
+```
