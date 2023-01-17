@@ -2,21 +2,26 @@ use std::str::FromStr;
 use std::{env, io};
 
 use anyhow::Result;
+use k8s_openapi::api::core::v1::Secret as KubeSecret;
 use kube::config::{AuthInfo, Kubeconfig, NamedAuthInfo};
+use kube::{Api, Client};
 use secrecy::Secret;
+use thiserror::Error;
 
 #[tokio::main]
 async fn main() -> Result<()> {
     let args: Vec<String> = env::args().collect();
     let mut buf = String::new();
-    let token = if args.len() > 1 {
-        args[1].trim()
-    } else {
-        let stdin = io::stdin();
-        stdin.read_line(&mut buf)?;
-        buf.trim()
+    let token = match args.len() {
+        x if x > 2 => token_from_secret(args[1].trim(), args[2].trim()).await?,
+        2 => args[1].clone(),
+        _ => {
+            let stdin = io::stdin();
+            stdin.read_line(&mut buf)?;
+            buf
+        }
     };
-
+    let token = token.trim();
     let kubeconfig = Kubeconfig::read()?;
     let mut ctx = kubeconfig.current_context.expect("current context not set");
     let contexts = kubeconfig.contexts;
@@ -61,6 +66,30 @@ async fn main() -> Result<()> {
 
     println!("{}", serde_yaml::to_string(&new_config).unwrap());
     Ok(())
+}
+
+#[derive(Error, Debug)]
+enum TokenError {
+    #[error("empty token")]
+    Empty,
+}
+
+async fn token_from_secret(namespace: &str, name: &str) -> Result<String> {
+    let client = Client::try_default().await?;
+    let api: Api<KubeSecret> = Api::namespaced(client, namespace);
+    let secret = api.get(name).await?;
+    let mut token = String::new();
+    if let Some(data) = secret.data {
+        if let Some(b) = data.get("token") {
+            token = std::str::from_utf8(&b.0)?.to_string();
+        }
+    }
+
+    if token.is_empty() {
+        return Err(TokenError::Empty.into());
+    }
+
+    Ok(token)
 }
 
 #[cfg(test)]

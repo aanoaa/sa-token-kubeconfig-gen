@@ -40,8 +40,14 @@ EOF
 # capture sa token from sa-secret
 $ TOKEN=`kubectl get secret my-app-token-pr7z7 -o jsonpath='{.data.token}' | base64 --decode`
 
-# generate kubeconfig for deployment
-$ echo $TOKEN | sa-token-kubeconfig-gen > deploy-kubeconfig.yaml
+## generate kubeconfig for deployment
+
+# 1. token via stdin
+$ echo $TOKEN | cargo run > deploy-kubeconfig.yaml
+$ cargo run > deploy-kubeconfig.yaml
+
+# 2. token via current kubeconfig context secret
+$ cargo run -- some-namespace my-app-token-pr7z7 > deploy-kubeconfig.yaml
 
 # verify
 $ kubectl get deploy --kubeconfig ./deploy-kubeconfig.yaml

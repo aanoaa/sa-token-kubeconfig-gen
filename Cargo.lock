@@ -887,6 +887,7 @@ dependencies = [
  "kube",
  "secrecy",
  "serde_yaml 0.9.16",
+ "thiserror",
  "tokio",
 ]
 
